@@ -1,3 +1,4 @@
+use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
@@ -8,6 +9,8 @@ use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, tool, tool_router};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::result::Result as StdResult;
+use crate::error::Result;
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct EchoArgs {
@@ -16,7 +19,7 @@ pub struct EchoArgs {
 
 #[derive(Clone)]
 pub struct AideMcpSrv {
-    tool_router: rmcp::handler::server::router::tool::ToolRouter<Self>,
+    tool_router: ToolRouter<Self>,
 }
 
 #[tool_router]
@@ -28,7 +31,7 @@ impl AideMcpSrv {
     }
 
     #[tool(description = "根据输入消息返回相同内容的问候。")]
-    async fn echo(&self, Parameters(args): Parameters<EchoArgs>) -> crate::error::Result<String> {
+    async fn echo(&self, Parameters(args): Parameters<EchoArgs>) -> Result<String> {
         eprintln!("收到消息: {}", args.message);
         Ok(format!("Echo: {}", args.message))
     }
@@ -39,7 +42,7 @@ impl ServerHandler for AideMcpSrv {
         &self,
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
-    ) -> std::result::Result<CallToolResult, McpError> {
+    ) -> StdResult<CallToolResult, McpError> {
         let tool_context = ToolCallContext::new(self, request, context);
         self.tool_router.call(tool_context).await
     }
@@ -48,7 +51,7 @@ impl ServerHandler for AideMcpSrv {
         &self,
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
-    ) -> std::result::Result<ListToolsResult, McpError> {
+    ) -> StdResult<ListToolsResult, McpError> {
         Ok(ListToolsResult::with_all_items(self.tool_router.list_all()))
     }
 

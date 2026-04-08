@@ -2,6 +2,8 @@ use rmcp::ServiceExt;
 mod error;
 mod srv;
 
+use tokio::io;
+
 use crate::error::Result;
 
 #[tokio::main]
@@ -10,7 +12,7 @@ async fn main() -> Result<()> {
     let server = srv::AideMcpSrv::new();
 
     // 使用 tokio 的标准输入输出作为传输层
-    let transport = (tokio::io::stdin(), tokio::io::stdout());
+    let transport = (io::stdin(), io::stdout());
 
     eprintln!(
         "正在启动 MCP 服务 ({} v{})...",
@@ -22,7 +24,7 @@ async fn main() -> Result<()> {
     server
         .serve(transport)
         .await
-        .map_err(|e| crate::error::Error::Other(format!("{:?}", e)))?;
+        .map_err(|e| error::Error::Other(format!("{:?}", e)))?;
 
     Ok(())
 }
