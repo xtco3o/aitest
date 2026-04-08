@@ -15,21 +15,10 @@ async fn main() -> Result<()> {
     let cache_dir = project_dirs.cache_dir();
     let index_path = cache_dir.join("index.db");
 
-    let url = std::env::var("TURSO_DATABASE_URL").ok();
-    let token = std::env::var("TURSO_AUTH_TOKEN").ok();
-
-    // 初始化 Store
-    let store = if let (Some(url), Some(token)) = (url, token) {
-        eprintln!("正在连接到 Turso 远程数据库并同步到本地...");
-        let local_path = index_path
-            .to_str()
-            .expect("无效的本地数据库路径")
-            .to_string();
-        Arc::new(ExperienceStore::open_remote(local_path, url, token).await?)
-    } else {
-        eprintln!("使用本地数据库: {:?}", index_path);
-        Arc::new(ExperienceStore::open_or_create(index_path).await?)
-    };
+    // 目前该版本的 turso crate (Limbo) 侧重于本地高性能存储
+    // 我们优先使用本地模式以发挥其 Native FTS (基于 Tantivy) 的优势
+    eprintln!("使用 Turso (Limbo) 本地数据库: {:?}", index_path);
+    let store = Arc::new(ExperienceStore::open_or_create(index_path).await?);
 
     // 初始化 McpSrv
     let server = McpSrv::new(store);
