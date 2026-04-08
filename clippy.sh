@@ -11,7 +11,9 @@ cargo fmt
 # dasel ".workspace.members.all()" -r toml -f Cargo.toml | xargs cargo fmt -p
 set -x
 
-exec cargo +nightly clippy \
+rtk cargo check
+
+exec rtk cargo +nightly clippy \
   --tests --all-targets --allow-dirty \
   --all-features --fix -Z unstable-options -- \
   -A clippy::uninit_assumed_init \

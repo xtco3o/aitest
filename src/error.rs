@@ -11,6 +11,9 @@ pub enum Error {
     #[error("IO 错误: {0}")]
     Io(#[from] io::Error),
 
+    #[error("Tantivy 错误: {0}")]
+    Tantivy(#[from] tantivy::error::TantivyError),
+
     #[error("其他错误: {0}")]
     Other(String),
 }
