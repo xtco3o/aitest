@@ -1,4 +1,5 @@
 use thiserror::Error;
+use rmcp::model::{Content, IntoContents};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -10,6 +11,13 @@ pub enum Error {
 
     #[error("其他错误: {0}")]
     Other(String),
+}
+
+/// 实现 IntoContents 以便 rmcp 可以将错误作为响应内容发送
+impl IntoContents for Error {
+    fn into_contents(self) -> Vec<Content> {
+        vec![Content::text(self.to_string())]
+    }
 }
 
 /// 项目统一的 Result 类型
