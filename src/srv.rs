@@ -130,7 +130,6 @@ impl ServerHandler for McpSrv {
 mod tests {
     use super::*;
     use crate::store::ExperienceStore;
-    use rmcp::model::RequestId;
     use std::sync::Arc;
 
     #[tokio::test]
