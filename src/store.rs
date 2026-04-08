@@ -64,7 +64,7 @@ impl ExperienceStore {
     }
 
     pub async fn add_experience(&self, exp: Experience) -> Result<()> {
-        let tags_json = serde_json::to_string(&exp.tags).unwrap_or_default();
+        let tags_json = sonic_rs::to_string(&exp.tags).unwrap_or_default();
 
         // 预分词处理
         let tokenized_title = self.tokenize(&exp.title);
@@ -98,7 +98,7 @@ impl ExperienceStore {
         let mut results = Vec::new();
         while let Some(row) = rows.next().await? {
             let tags_json: String = row.get(3)?;
-            let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
+            let tags: Vec<String> = sonic_rs::from_str(&tags_json).unwrap_or_default();
 
             results.push(Experience {
                 id: row.get(0)?,
