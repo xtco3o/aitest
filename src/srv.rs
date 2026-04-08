@@ -1,3 +1,4 @@
+use crate::error::Result;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
@@ -10,7 +11,6 @@ use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, tool, tool_router};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::result::Result as StdResult;
-use crate::error::Result;
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct EchoArgs {
@@ -56,15 +56,15 @@ impl ServerHandler for AideMcpSrv {
     }
 
     fn get_info(&self) -> InitializeResult {
-        InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: ServerCapabilities::default(),
-            server_info: Implementation {
-                name: env!("CARGO_PKG_NAME").to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                ..Default::default()
-            },
-            instructions: None,
-        }
+        let mut info = InitializeResult::default();
+        info.protocol_version = ProtocolVersion::LATEST;
+        info.capabilities = ServerCapabilities::default();
+
+        let mut server_info = Implementation::default();
+        server_info.name = env!("CARGO_PKG_NAME").to_string();
+        server_info.version = env!("CARGO_PKG_VERSION").to_string();
+
+        info.server_info = server_info;
+        info
     }
 }
