@@ -1,16 +1,15 @@
-use rmcp::{tool, tool_router, RoleServer, ServerHandler, RmcpError};
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ListToolsResult, PaginatedRequestParams, 
-    InitializeResult, Implementation, ProtocolVersion, ServerCapabilities
+    CallToolRequestParams, CallToolResult, Implementation, InitializeResult, ListToolsResult,
+    PaginatedRequestParams, ProtocolVersion, ServerCapabilities,
 };
 use rmcp::service::RequestContext;
-use crate::error::Result;
-use serde::Deserialize;
+use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, tool, tool_router};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct EchoArgs {
     pub message: String,
 }
@@ -29,7 +28,7 @@ impl AideMcpSrv {
     }
 
     #[tool(description = "根据输入消息返回相同内容的问候。")]
-    async fn echo(&self, Parameters(args): Parameters<EchoArgs>) -> Result<String> {
+    async fn echo(&self, Parameters(args): Parameters<EchoArgs>) -> crate::error::Result<String> {
         eprintln!("收到消息: {}", args.message);
         Ok(format!("Echo: {}", args.message))
     }
@@ -40,7 +39,7 @@ impl ServerHandler for AideMcpSrv {
         &self,
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
-    ) -> std::result::Result<CallToolResult, RmcpError> {
+    ) -> std::result::Result<CallToolResult, McpError> {
         let tool_context = ToolCallContext::new(self, request, context);
         self.tool_router.call(tool_context).await
     }
@@ -49,10 +48,10 @@ impl ServerHandler for AideMcpSrv {
         &self,
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
-    ) -> std::result::Result<ListToolsResult, RmcpError> {
+    ) -> std::result::Result<ListToolsResult, McpError> {
         Ok(ListToolsResult::with_all_items(self.tool_router.list_all()))
     }
-    
+
     fn get_info(&self) -> InitializeResult {
         InitializeResult {
             protocol_version: ProtocolVersion::LATEST,

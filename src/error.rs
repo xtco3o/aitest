@@ -1,13 +1,15 @@
-use thiserror::Error;
 use rmcp::model::{Content, IntoContents};
+use std::result::Result as StdResult;
+use thiserror::Error;
+use tokio::io;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("MCP 协议错误: {0}")]
-    Rmcp(#[from] rmcp::RmcpError),
+    Rmcp(#[from] Box<rmcp::RmcpError>),
 
     #[error("IO 错误: {0}")]
-    Io(#[from] tokio::io::Error),
+    Io(#[from] io::Error),
 
     #[error("其他错误: {0}")]
     Other(String),
@@ -21,4 +23,4 @@ impl IntoContents for Error {
 }
 
 /// 项目统一的 Result 类型
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = StdResult<T, Error>;
