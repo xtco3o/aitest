@@ -12,7 +12,7 @@ pub enum Error {
     Io(#[from] io::Error),
 
     #[error("数据库错误: {0}")]
-    Database(#[from] libsql::Error),
+    Database(#[from] turso::Error),
 
     #[error("初始化或逻辑错误: {0}")]
     Init(String),

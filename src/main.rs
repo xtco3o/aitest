@@ -20,10 +20,14 @@ async fn main() -> Result<()> {
 
     // 初始化 Store
     let store = if let (Some(url), Some(token)) = (url, token) {
-        eprintln!("正在连接到 Turso 远程数据库...");
-        Arc::new(ExperienceStore::open_remote(url, token).await?)
+        eprintln!("正在连接到 Turso 远程数据库并同步到本地...");
+        let local_path = index_path
+            .to_str()
+            .expect("无效的本地数据库路径")
+            .to_string();
+        Arc::new(ExperienceStore::open_remote(local_path, url, token).await?)
     } else {
-        eprintln!("数据库保存路径: {:?}", index_path);
+        eprintln!("使用本地数据库: {:?}", index_path);
         Arc::new(ExperienceStore::open_or_create(index_path).await?)
     };
 

@@ -1,9 +1,9 @@
 use crate::error::Result;
 use jieba_rs::Jieba;
-use libsql::{Connection, Database, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
+use turso::{Builder, Connection, Database, params::IntoValue};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Experience {
@@ -21,12 +21,21 @@ pub struct ExperienceStore {
 
 impl ExperienceStore {
     pub async fn open_or_create<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let db = libsql::Builder::new_local(path.as_ref()).build().await?;
+        let path_str = path
+            .as_ref()
+            .to_str()
+            .ok_or_else(|| crate::error::Error::Init("无效的数据库路径".to_string()))?;
+        let db = Builder::new_local(path_str).build().await?;
         Self::init_with_db(db).await
     }
 
-    pub async fn open_remote(url: String, token: String) -> Result<Self> {
-        let db = libsql::Builder::new_remote(url, token).build().await?;
+    pub async fn open_remote(path: String, url: String, token: String) -> Result<Self> {
+        // 使用嵌入式副本 (Embedded Replica) 是 Turso 推荐的 Rust 使用方式
+        let db = Builder::new_remote_replica(&path, &url, &token)
+            .build()
+            .await?;
+        // 同步一次
+        db.sync().await?;
         Self::init_with_db(db).await
     }
 
@@ -34,26 +43,23 @@ impl ExperienceStore {
         let conn = db.connect()?;
 
         // 初始化表
-        conn.execute_batch(
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS experiences (
                 id TEXT PRIMARY KEY,
                 title TEXT,
                 content TEXT,
                 tags TEXT,
                 created_at INTEGER
-            );
-            CREATE VIRTUAL TABLE IF NOT EXISTS experiences_fts USING fts5(
-                id UNINDEXED,
-                title,
-                content,
-                content='experiences',
-                content_rowid='rowid'
-            );
-            -- 触发器同步 FTS
-            CREATE TRIGGER IF NOT EXISTS experiences_ai AFTER INSERT ON experiences BEGIN
-                INSERT INTO experiences_fts(rowid, id, title, content) 
-                VALUES (new.rowid, new.id, new.title, new.content);
-            END;",
+            )",
+            (),
+        )
+        .await?;
+
+        // 使用 Turso 原生 FTS 索引 (基于 Tantivy)
+        // 这是 Limbo/Turso 的原生功能，语法更加简洁
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_exp_fts ON experiences USING fts(title, content)",
+            (),
         )
         .await?;
 
@@ -63,7 +69,7 @@ impl ExperienceStore {
         })
     }
 
-    /// 对中文文本进行分词，以便 FTS5 搜索
+    /// 对中文文本进行分词，以便原生 FTS 搜索
     fn tokenize(&self, text: &str) -> String {
         self.jieba.cut(text, false).join(" ")
     }
@@ -71,33 +77,42 @@ impl ExperienceStore {
     pub async fn add_experience(&self, exp: Experience) -> Result<()> {
         let tags_json = serde_json::to_string(&exp.tags).unwrap_or_default();
 
-        // 分词处理
+        // 预分词处理
         let tokenized_title = self.tokenize(&exp.title);
         let tokenized_content = self.tokenize(&exp.content);
 
+        // 使用明确的参数元组以避免类型推导歧义
+        let params: [Box<dyn IntoValue>; 5] = [
+            Box::new(exp.id),
+            Box::new(tokenized_title),
+            Box::new(tokenized_content),
+            Box::new(tags_json),
+            Box::new(exp.created_at),
+        ];
+
         self.conn
             .execute(
-                "INSERT INTO experiences (id, title, content, tags, created_at) VALUES (?, ?, ?, ?, ?)",
-                params![exp.id, tokenized_title, tokenized_content, tags_json, exp.created_at],
+                "INSERT INTO experiences (id, title, content, tags, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params,
             )
             .await?;
         Ok(())
     }
 
     pub async fn search(&self, query_str: &str, limit: usize) -> Result<Vec<Experience>> {
-        // 搜索词也需要分词
         let tokenized_query = self.tokenize(query_str);
 
-        let mut rows = self
-            .conn
+        // 使用 Turso 原生 FTS 函数 fts_match 和 fts_score
+        let params: [Box<dyn IntoValue>; 2] = [Box::new(tokenized_query), Box::new(limit as i64)];
+
+        let mut rows = self.conn
             .query(
-                "SELECT e.id, e.title, e.content, e.tags, e.created_at 
-                 FROM experiences e
-                 JOIN experiences_fts f ON e.rowid = f.rowid
-                 WHERE experiences_fts MATCH ?
-                 ORDER BY rank 
-                 LIMIT ?",
-                params![tokenized_query, limit as i64],
+                "SELECT id, title, content, tags, created_at, fts_score(title, content, ?1) as score 
+                 FROM experiences 
+                 WHERE fts_match(title, content, ?1) 
+                 ORDER BY score DESC 
+                 LIMIT ?2",
+                params,
             )
             .await?;
 
