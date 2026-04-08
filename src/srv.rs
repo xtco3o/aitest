@@ -125,3 +125,38 @@ impl ServerHandler for McpSrv {
         Ok(info)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::ExperienceStore;
+    use rmcp::model::RequestId;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_srv_logic() {
+        let store = Arc::new(ExperienceStore::open_or_create(":memory:").await.unwrap());
+        let srv = McpSrv::new(store);
+
+        // Test save
+        let args = SaveExperienceArgs {
+            id: Some("test".to_string()),
+            title: "标题".to_string(),
+            content: "内容".to_string(),
+            tags: Some(vec!["tag".to_string()]),
+        };
+        let res = srv.save_experience(Parameters(args)).await.unwrap();
+        assert!(res.contains("test"));
+
+        // Test search
+        let search_args = SearchExperienceArgs {
+            query: "标题".to_string(),
+            limit: Some(1),
+        };
+        let search_res = srv
+            .search_experience(Parameters(search_args))
+            .await
+            .unwrap();
+        assert!(search_res.contains("内容"));
+    }
+}

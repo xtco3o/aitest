@@ -1,6 +1,6 @@
 use crate::error::Result;
 use jieba_rs::Jieba;
-use libsql::{params, Connection, Database};
+use libsql::{Connection, Database, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -70,7 +70,7 @@ impl ExperienceStore {
 
     pub async fn add_experience(&self, exp: Experience) -> Result<()> {
         let tags_json = serde_json::to_string(&exp.tags).unwrap_or_default();
-        
+
         // 分词处理
         let tokenized_title = self.tokenize(&exp.title);
         let tokenized_content = self.tokenize(&exp.content);
@@ -87,8 +87,9 @@ impl ExperienceStore {
     pub async fn search(&self, query_str: &str, limit: usize) -> Result<Vec<Experience>> {
         // 搜索词也需要分词
         let tokenized_query = self.tokenize(query_str);
-        
-        let mut rows = self.conn
+
+        let mut rows = self
+            .conn
             .query(
                 "SELECT e.id, e.title, e.content, e.tags, e.created_at 
                  FROM experiences e
