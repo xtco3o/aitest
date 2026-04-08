@@ -3,7 +3,7 @@ use jieba_rs::Jieba;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
-use turso::{Builder, Connection, Database};
+use turso::{Builder, Connection};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Experience {
@@ -25,7 +25,10 @@ impl ExperienceStore {
             .as_ref()
             .to_str()
             .ok_or_else(|| crate::error::Error::Init("无效的数据库路径".to_string()))?;
-        let db = Builder::new_local(path_str).build().await?;
+        let db = Builder::new_local(path_str)
+            .experimental_index_method(true)
+            .build()
+            .await?;
         let conn = db.connect()?;
 
         // 初始化表

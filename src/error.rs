@@ -12,10 +12,16 @@ pub enum Error {
     Io(#[from] io::Error),
 
     #[error("数据库错误: {0}")]
-    Database(#[from] turso::Error),
+    Database(String),
 
     #[error("初始化或逻辑错误: {0}")]
     Init(String),
+}
+
+impl From<turso::Error> for Error {
+    fn from(err: turso::Error) -> Self {
+        Error::Database(format!("{:?}", err))
+    }
 }
 
 /// 实现 IntoContents 以便 rmcp 可以将错误作为响应内容发送

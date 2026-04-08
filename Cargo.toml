@@ -11,7 +11,8 @@ serde_json = "1.0"
 schemars = "1.2"
 thiserror = "2.0.18"
 sonic-rs = "0.5.8"
-turso = { version = "0.6.0-pre.15", features = ["sync"] }
+turso = { version = "0.6.0-pre.15" }
+turso_core = { version = "0.6.0-pre.15", features = ["fts"] }
 jieba-rs = "0.8.1"
 directories = "6.0.0"
 uuid = { version = "1.23.0", features = ["v4"] }
