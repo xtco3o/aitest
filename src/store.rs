@@ -1,12 +1,12 @@
 use crate::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use tantivy::collector::TopDocs;
+use tantivy::collector::{Collector, TopDocs};
 use tantivy::query::QueryParser;
 use tantivy::schema::{
     FAST, IndexRecordOption, STORED, STRING, Schema, TEXT, TextAttributeInfo, TextOptions,
 };
-use tantivy::{Index, IndexWriter, ReloadPolicy, doc};
+use tantivy::{doc, DocAddress, Index, IndexWriter, Order, ReloadPolicy};
 use tantivy_jieba::JiebaTokenizer;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -106,8 +106,11 @@ impl ExperienceStore {
 
     pub fn search(&self, query_str: &str, limit: usize) -> Result<Vec<Experience>> {
         let searcher = self.reader.searcher();
+        let id_field = self.schema.get_field("id").unwrap();
         let title_field = self.schema.get_field("title").unwrap();
         let content_field = self.schema.get_field("content").unwrap();
+        let tags_field = self.schema.get_field("tags").unwrap();
+        let created_at_field = self.schema.get_field("created_at").unwrap();
 
         let query_parser = QueryParser::for_index(&self.index, vec![title_field, content_field]);
         let query = query_parser
@@ -121,7 +124,7 @@ impl ExperienceStore {
             let retrieved_doc = searcher.doc(doc_address)?;
 
             let id = retrieved_doc
-                .get_first(self.schema.get_field("id").unwrap())
+                .get_first(id_field)
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string();
@@ -136,12 +139,12 @@ impl ExperienceStore {
                 .unwrap_or_default()
                 .to_string();
             let created_at = retrieved_doc
-                .get_first(self.schema.get_field("created_at").unwrap())
+                .get_first(created_at_field)
                 .and_then(|v| v.as_i64())
                 .unwrap_or_default();
 
             let tags = retrieved_doc
-                .get_all(self.schema.get_field("tags").unwrap())
+                .get_all(tags_field)
                 .filter_map(|v| v.as_str())
                 .map(|s| s.to_string())
                 .collect();

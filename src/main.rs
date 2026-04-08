@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
 
     // 获取系统的用户级别缓存目录
     let project_dirs = ProjectDirs::from("", "", pkg_name)
-        .ok_or_else(|| Error::Other("无法获取项目目录".to_string()))?;
+        .expect("无法获取项目目录");
 
     let cache_dir = project_dirs.cache_dir();
     let index_path = cache_dir.join("index");
@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
     // 初始化 Store
     let store = Arc::new(store::ExperienceStore::open_or_create(index_path)?);
 
-    // 初始化模块化后的 Srv
+    // 初始化 McpSrv
     let server = srv::McpSrv::new(store);
 
     // 使用 tokio 的标准输入输出作为传输层
@@ -37,11 +37,8 @@ async fn main() -> Result<()> {
         env!("CARGO_PKG_VERSION")
     );
 
-    // 启动服务，并将底层错误包装为自定义错误
-    server
-        .serve(transport)
-        .await
-        .map_err(|e| Error::Other(format!("{:?}", e)))?;
+    // 启动服务
+    rmcp::serve_server(server, transport).await?;
 
     Ok(())
 }

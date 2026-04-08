@@ -4,8 +4,9 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, Implementation, InitializeResult, ListToolsResult,
-    PaginatedRequestParams, ProtocolVersion, ServerCapabilities,
+    CallToolRequestParams, CallToolResult, Implementation, InitializeRequestParams,
+    InitializeResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+    ServerCapabilities,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, tool, tool_router};
@@ -81,13 +82,13 @@ impl McpSrv {
         let results = self.store.search(&args.query, args.limit.unwrap_or(5))?;
 
         let json_results = sonic_rs::to_string_pretty(&results)
-            .map_err(|e| crate::error::Error::Other(format!("JSON 序列化失败: {}", e)))?;
+            .map_err(|e| crate::error::Error::Tantivy(tantivy::error::TantivyError::InternalError(format!("JSON 序列化失败: {}", e))))?;
 
         Ok(json_results)
     }
 }
 
-impl ServerHandler for AideMcpSrv {
+impl ServerHandler for McpSrv {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
@@ -105,7 +106,11 @@ impl ServerHandler for AideMcpSrv {
         Ok(ListToolsResult::with_all_items(self.tool_router.list_all()))
     }
 
-    fn get_info(&self) -> InitializeResult {
+    async fn initialize(
+        &self,
+        _request: InitializeRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> StdResult<InitializeResult, McpError> {
         let mut info = InitializeResult::default();
         info.protocol_version = ProtocolVersion::LATEST;
         info.capabilities = ServerCapabilities::default();
@@ -115,6 +120,6 @@ impl ServerHandler for AideMcpSrv {
         server_info.version = env!("CARGO_PKG_VERSION").to_string();
 
         info.server_info = server_info;
-        info
+        Ok(info)
     }
 }

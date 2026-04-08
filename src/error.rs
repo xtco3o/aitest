@@ -6,16 +6,16 @@ use tokio::io;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("MCP 协议错误: {0}")]
-    Rmcp(#[from] Box<rmcp::RmcpError>),
+    Mcp(#[from] rmcp::ErrorData),
+
+    #[error(transparent)]
+    Rmcp(#[from] rmcp::Error),
 
     #[error("IO 错误: {0}")]
     Io(#[from] io::Error),
 
     #[error("Tantivy 错误: {0}")]
     Tantivy(#[from] tantivy::error::TantivyError),
-
-    #[error("其他错误: {0}")]
-    Other(String),
 }
 
 /// 实现 IntoContents 以便 rmcp 可以将错误作为响应内容发送
