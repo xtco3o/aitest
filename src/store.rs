@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
 use jieba_rs::Jieba;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -24,7 +24,7 @@ impl ExperienceStore {
         let path_str = path
             .as_ref()
             .to_str()
-            .ok_or_else(|| crate::error::Error::Init("无效的数据库路径".to_string()))?;
+            .ok_or_else(|| Error::Init("无效的数据库路径".to_string()))?;
         let db = Builder::new_local(path_str)
             .experimental_index_method(true)
             .build()
