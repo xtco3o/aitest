@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::store::{Experience, ExperienceStore};
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
@@ -69,7 +69,7 @@ impl McpSrv {
             created_at,
         };
 
-        self.store.add_experience(exp)?;
+        self.store.add_experience(exp).await?;
         Ok(format!("已保存经验，ID: {}", id))
     }
 
@@ -78,10 +78,13 @@ impl McpSrv {
         &self,
         Parameters(args): Parameters<SearchExperienceArgs>,
     ) -> Result<String> {
-        let results = self.store.search(&args.query, args.limit.unwrap_or(5))?;
+        let results = self
+            .store
+            .search(&args.query, args.limit.unwrap_or(5))
+            .await?;
 
         let json_results = sonic_rs::to_string_pretty(&results)
-            .map_err(|e| crate::error::Error::Init(format!("JSON 序列化失败: {}", e)))?;
+            .map_err(|e| Error::Init(format!("JSON 序列化失败: {}", e)))?;
 
         Ok(json_results)
     }

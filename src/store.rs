@@ -1,13 +1,9 @@
-use crate::error::{Error, Result};
+use crate::error::Result;
+use jieba_rs::Jieba;
+use libsql::{params, Connection, Database};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use tantivy::collector::{Collector, TopDocs};
-use tantivy::query::QueryParser;
-use tantivy::schema::{
-    FAST, IndexRecordOption, STORED, STRING, Schema, TEXT, TextAttributeInfo, TextOptions,
-};
-use tantivy::{DocAddress, Index, IndexWriter, Order, ReloadPolicy, doc};
-use tantivy_jieba::JiebaTokenizer;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Experience {
@@ -19,142 +15,102 @@ pub struct Experience {
 }
 
 pub struct ExperienceStore {
-    index: Index,
-    reader: tantivy::IndexReader,
-    schema: Schema,
+    conn: Connection,
+    jieba: Arc<Jieba>,
 }
 
 impl ExperienceStore {
-    pub fn open_or_create<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let mut schema_builder = Schema::builder();
+    pub async fn open_or_create<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let db = libsql::Builder::new_local(path.as_ref()).build().await?;
+        Self::init_with_db(db).await
+    }
 
-        // id is a unique string
-        let id = schema_builder.add_text_field("id", STRING | STORED);
+    pub async fn open_remote(url: String, token: String) -> Result<Self> {
+        let db = libsql::Builder::new_remote(url, token).build().await?;
+        Self::init_with_db(db).await
+    }
 
-        // title and content use Chinese tokenizer
-        let text_options = TextOptions::default()
-            .set_indexing_options(
-                TextAttributeInfo::default()
-                    .set_tokenizer("jieba")
-                    .set_index_option(IndexRecordOption::WithFreqsAndPositions),
-            )
-            .set_stored();
+    async fn init_with_db(db: Database) -> Result<Self> {
+        let conn = db.connect()?;
 
-        let title = schema_builder.add_text_field("title", text_options.clone());
-        let content = schema_builder.add_text_field("content", text_options);
-
-        // tags is a list of strings
-        let tags = schema_builder.add_text_field("tags", STRING | STORED);
-
-        // created_at is a timestamp
-        let created_at = schema_builder.add_i64_field("created_at", STORED | FAST);
-
-        let schema = schema_builder.build();
-
-        let index_path = path.as_ref();
-        if !index_path.exists() {
-            std::fs::create_dir_all(index_path)?;
-        }
-
-        let index = Index::open_or_create(
-            tantivy::directory::MmapDirectory::open(index_path)?,
-            schema.clone(),
-        )?;
-
-        // Register Jieba tokenizer
-        index
-            .tokenizers()
-            .register("jieba", JiebaTokenizer::default());
-
-        let reader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::OnCommitWithDelay)
-            .try_into()?;
+        // 初始化表
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS experiences (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                content TEXT,
+                tags TEXT,
+                created_at INTEGER
+            );
+            CREATE VIRTUAL TABLE IF NOT EXISTS experiences_fts USING fts5(
+                id UNINDEXED,
+                title,
+                content,
+                content='experiences',
+                content_rowid='rowid'
+            );
+            -- 触发器同步 FTS
+            CREATE TRIGGER IF NOT EXISTS experiences_ai AFTER INSERT ON experiences BEGIN
+                INSERT INTO experiences_fts(rowid, id, title, content) 
+                VALUES (new.rowid, new.id, new.title, new.content);
+            END;",
+        )
+        .await?;
 
         Ok(Self {
-            index,
-            reader,
-            schema,
+            conn,
+            jieba: Arc::new(Jieba::new()),
         })
     }
 
-    pub fn add_experience(&self, exp: Experience) -> Result<()> {
-        let mut index_writer: IndexWriter = self.index.writer(50_000_000)?;
+    /// 对中文文本进行分词，以便 FTS5 搜索
+    fn tokenize(&self, text: &str) -> String {
+        self.jieba.cut(text, false).join(" ")
+    }
 
-        let id_field = self.schema.get_field("id").unwrap();
-        let title_field = self.schema.get_field("title").unwrap();
-        let content_field = self.schema.get_field("content").unwrap();
-        let tags_field = self.schema.get_field("tags").unwrap();
-        let created_at_field = self.schema.get_field("created_at").unwrap();
+    pub async fn add_experience(&self, exp: Experience) -> Result<()> {
+        let tags_json = serde_json::to_string(&exp.tags).unwrap_or_default();
+        
+        // 分词处理
+        let tokenized_title = self.tokenize(&exp.title);
+        let tokenized_content = self.tokenize(&exp.content);
 
-        let mut doc = doc!(
-            id_field => exp.id,
-            title_field => exp.title,
-            content_field => exp.content,
-            created_at_field => exp.created_at,
-        );
-
-        for tag in exp.tags {
-            doc.add_text(tags_field, tag);
-        }
-
-        index_writer.add_document(doc)?;
-        index_writer.commit()?;
-
+        self.conn
+            .execute(
+                "INSERT INTO experiences (id, title, content, tags, created_at) VALUES (?, ?, ?, ?, ?)",
+                params![exp.id, tokenized_title, tokenized_content, tags_json, exp.created_at],
+            )
+            .await?;
         Ok(())
     }
 
-    pub fn search(&self, query_str: &str, limit: usize) -> Result<Vec<Experience>> {
-        let searcher = self.reader.searcher();
-        let id_field = self.schema.get_field("id").unwrap();
-        let title_field = self.schema.get_field("title").unwrap();
-        let content_field = self.schema.get_field("content").unwrap();
-        let tags_field = self.schema.get_field("tags").unwrap();
-        let created_at_field = self.schema.get_field("created_at").unwrap();
-
-        let query_parser = QueryParser::for_index(&self.index, vec![title_field, content_field]);
-        let query = query_parser
-            .parse_query(query_str)
-            .map_err(|e| Error::Init(format!("Query parse error: {}", e)))?;
-
-        let top_docs = searcher.search(&query, &TopDocs::with_limit(limit))?;
+    pub async fn search(&self, query_str: &str, limit: usize) -> Result<Vec<Experience>> {
+        // 搜索词也需要分词
+        let tokenized_query = self.tokenize(query_str);
+        
+        let mut rows = self.conn
+            .query(
+                "SELECT e.id, e.title, e.content, e.tags, e.created_at 
+                 FROM experiences e
+                 JOIN experiences_fts f ON e.rowid = f.rowid
+                 WHERE experiences_fts MATCH ?
+                 ORDER BY rank 
+                 LIMIT ?",
+                params![tokenized_query, limit as i64],
+            )
+            .await?;
 
         let mut results = Vec::new();
-        for (_score, doc_address) in top_docs {
-            let retrieved_doc = searcher.doc(doc_address)?;
-
-            let id = retrieved_doc
-                .get_first(id_field)
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-            let title = retrieved_doc
-                .get_first(title_field)
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-            let content = retrieved_doc
-                .get_first(content_field)
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-            let created_at = retrieved_doc
-                .get_first(created_at_field)
-                .and_then(|v| v.as_i64())
-                .unwrap_or_default();
-
-            let tags = retrieved_doc
-                .get_all(tags_field)
-                .filter_map(|v| v.as_str())
-                .map(|s| s.to_string())
-                .collect();
+        while let Some(row) = rows.next().await? {
+            let tags_json: String = row.get(3)?;
+            let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
 
             results.push(Experience {
-                id,
-                title,
-                content,
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
                 tags,
-                created_at,
+                created_at: row.get(4)?,
             });
         }
 

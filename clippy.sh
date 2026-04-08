@@ -12,7 +12,7 @@ cargo fmt
 set -x
 
 rtk cargo check
-
+cargo nextest run --all-features --no-capture
 exec rtk cargo +nightly clippy \
   --tests --all-targets --allow-dirty \
   --all-features --fix -Z unstable-options -- \

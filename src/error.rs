@@ -5,17 +5,14 @@ use tokio::io;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("MCP 错误: {0}")]
-    Rmcp(#[from] rmcp::Error),
+    #[error("MCP 错误: {0:?}")]
+    Rmcp(#[from] rmcp::ErrorData),
 
     #[error("IO 错误: {0}")]
     Io(#[from] io::Error),
 
-    #[error("Tantivy 索引错误: {0}")]
-    Tantivy(#[from] tantivy::error::TantivyError),
-
-    #[error("Tantivy 目录错误: {0}")]
-    TantivyDir(#[from] tantivy::directory::error::OpenDirectoryError),
+    #[error("数据库错误: {0}")]
+    Database(#[from] libsql::Error),
 
     #[error("初始化或逻辑错误: {0}")]
     Init(String),

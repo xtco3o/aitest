@@ -1,13 +1,9 @@
+use aitest::error::{Error, Result};
+use aitest::srv::McpSrv;
+use aitest::store::ExperienceStore;
 use directories::ProjectDirs;
-use rmcp::ServiceExt;
 use std::sync::Arc;
-mod error;
-mod srv;
-mod store;
-
 use tokio::io;
-
-use crate::error::{Error, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -17,15 +13,22 @@ async fn main() -> Result<()> {
     let project_dirs = ProjectDirs::from("", "", pkg_name).expect("无法获取项目目录");
 
     let cache_dir = project_dirs.cache_dir();
-    let index_path = cache_dir.join("index");
+    let index_path = cache_dir.join("index.db");
 
-    eprintln!("索引保存路径: {:?}", index_path);
+    let url = std::env::var("TURSO_DATABASE_URL").ok();
+    let token = std::env::var("TURSO_AUTH_TOKEN").ok();
 
     // 初始化 Store
-    let store = Arc::new(store::ExperienceStore::open_or_create(index_path)?);
+    let store = if let (Some(url), Some(token)) = (url, token) {
+        eprintln!("正在连接到 Turso 远程数据库...");
+        Arc::new(ExperienceStore::open_remote(url, token).await?)
+    } else {
+        eprintln!("数据库保存路径: {:?}", index_path);
+        Arc::new(ExperienceStore::open_or_create(index_path).await?)
+    };
 
     // 初始化 McpSrv
-    let server = srv::McpSrv::new(store);
+    let server = McpSrv::new(store);
 
     // 使用 tokio 的标准输入输出作为传输层
     let transport = (io::stdin(), io::stdout());
