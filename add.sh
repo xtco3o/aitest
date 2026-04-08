@@ -17,6 +17,9 @@ if [ ! -f "$BINARY_PATH" ]; then
     exit 1
 fi
 
+echo "正在从 Claude 中移除现有的 MCP 服务 'aitest' (如果存在)..."
+claude mcp remove aitest || true
+
 echo "正在将 MCP 服务 'aitest' 添加到 Claude..."
 # 使用 'claude mcp add' 注册服务。
 # 这通常会将其添加到全局的 claude_desktop_config.json 中。
