@@ -1,0 +1,22 @@
+# Added by cargo
+#
+# git ignores are hierarchical; see `git help ignore` for details.
+
+# The official target directory where all build artifacts are placed.
+/target
+
+# If you're building a library, you might want to ignore Cargo.lock.
+# However, for applications, you should commit it.
+# Cargo.lock
+
+# These are other build artifacts that may be generated.
+**/*.rs.bk
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# MacOS specific files
+.DS_Store
