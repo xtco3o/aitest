@@ -1,41 +1,28 @@
-use rmcp::{tool, tool_router, transport::stdio::StdioServerTransport, Server};
-use serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
-use anyhow::Result;
+use rmcp::ServiceExt;
+mod error;
+mod srv;
 
-/// Arguments for the echo tool.
-#[derive(Deserialize, Serialize, JsonSchema, Debug)]
-struct EchoArgs {
-    /// The message to echo back.
-    message: String,
-}
-
-/// The state of our MCP server.
-#[derive(Default)]
-struct AideMcpServer;
-
-#[tool_router]
-impl AideMcpServer {
-    /// Echoes back the message provided.
-    #[tool(description = "Returns the message provided by the user.")]
-    async fn echo(&self, args: EchoArgs) -> Result<String> {
-        eprintln!("Echoing back: {}", args.message);
-        Ok(format!("Echo: {}", args.message))
-    }
-}
+use crate::error::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 使用环境变量获取 Cargo.toml 中的名称和版本
-    let server = Server::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-    
-    // Use stdio transport for local integration with Claude.
-    let transport = StdioServerTransport::new();
-    
-    eprintln!("Starting MCP server...");
-    
-    // Run the server.
-    server.run(transport, AideMcpServer::default()).await?;
-    
+    // 初始化模块化后的 Srv
+    let server = srv::AideMcpSrv::new();
+
+    // 使用 tokio 的标准输入输出作为传输层
+    let transport = (tokio::io::stdin(), tokio::io::stdout());
+
+    eprintln!(
+        "正在启动 MCP 服务 ({} v{})...",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
+
+    // 启动服务，并将底层错误包装为自定义错误
+    server
+        .serve(transport)
+        .await
+        .map_err(|e| crate::error::Error::Other(format!("{:?}", e)))?;
+
     Ok(())
 }
