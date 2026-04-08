@@ -5,17 +5,20 @@ use tokio::io;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("MCP 协议错误: {0}")]
-    Mcp(#[from] rmcp::ErrorData),
-
-    #[error(transparent)]
+    #[error("MCP 错误: {0}")]
     Rmcp(#[from] rmcp::Error),
 
     #[error("IO 错误: {0}")]
     Io(#[from] io::Error),
 
-    #[error("Tantivy 错误: {0}")]
+    #[error("Tantivy 索引错误: {0}")]
     Tantivy(#[from] tantivy::error::TantivyError),
+
+    #[error("Tantivy 目录错误: {0}")]
+    TantivyDir(#[from] tantivy::directory::error::OpenDirectoryError),
+
+    #[error("初始化或逻辑错误: {0}")]
+    Init(String),
 }
 
 /// 实现 IntoContents 以便 rmcp 可以将错误作为响应内容发送

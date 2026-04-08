@@ -5,8 +5,7 @@ use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, Implementation, InitializeRequestParams,
-    InitializeResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
-    ServerCapabilities,
+    InitializeResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerCapabilities,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, tool, tool_router};
@@ -82,7 +81,7 @@ impl McpSrv {
         let results = self.store.search(&args.query, args.limit.unwrap_or(5))?;
 
         let json_results = sonic_rs::to_string_pretty(&results)
-            .map_err(|e| crate::error::Error::Tantivy(tantivy::error::TantivyError::InternalError(format!("JSON 序列化失败: {}", e))))?;
+            .map_err(|e| crate::error::Error::Init(format!("JSON 序列化失败: {}", e)))?;
 
         Ok(json_results)
     }

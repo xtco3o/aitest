@@ -14,8 +14,7 @@ async fn main() -> Result<()> {
     let pkg_name = env!("CARGO_PKG_NAME");
 
     // 获取系统的用户级别缓存目录
-    let project_dirs = ProjectDirs::from("", "", pkg_name)
-        .expect("无法获取项目目录");
+    let project_dirs = ProjectDirs::from("", "", pkg_name).expect("无法获取项目目录");
 
     let cache_dir = project_dirs.cache_dir();
     let index_path = cache_dir.join("index");
@@ -38,7 +37,9 @@ async fn main() -> Result<()> {
     );
 
     // 启动服务
-    rmcp::serve_server(server, transport).await?;
+    rmcp::serve_server(server, transport)
+        .await
+        .map_err(|e| Error::Init(format!("{:?}", e)))?;
 
     Ok(())
 }

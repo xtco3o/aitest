@@ -6,7 +6,7 @@ use tantivy::query::QueryParser;
 use tantivy::schema::{
     FAST, IndexRecordOption, STORED, STRING, Schema, TEXT, TextAttributeInfo, TextOptions,
 };
-use tantivy::{doc, DocAddress, Index, IndexWriter, Order, ReloadPolicy};
+use tantivy::{DocAddress, Index, IndexWriter, Order, ReloadPolicy, doc};
 use tantivy_jieba::JiebaTokenizer;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -115,7 +115,7 @@ impl ExperienceStore {
         let query_parser = QueryParser::for_index(&self.index, vec![title_field, content_field]);
         let query = query_parser
             .parse_query(query_str)
-            .map_err(|e| Error::Other(format!("Query parse error: {}", e)))?;
+            .map_err(|e| Error::Init(format!("Query parse error: {}", e)))?;
 
         let top_docs = searcher.search(&query, &TopDocs::with_limit(limit))?;
 
